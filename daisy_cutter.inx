@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
-    <name>Daisey Cutter</name>
+    <name>Daisy Cutter</name>
     <id>com.github.j33433.daisycutter</id>
     <label>
 Select one cutter object on top. Subtracts its shape from every
@@ -16,6 +16,6 @@ the cutter unless you keep it.
         </effects-menu>
     </effect>
     <script>
-        <command location="inx" interpreter="python">daisey_cutter.py</command>
+        <command location="inx" interpreter="python">daisy_cutter.py</command>
     </script>
 </inkscape-extension>

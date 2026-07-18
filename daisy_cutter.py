@@ -15,7 +15,7 @@ from lxml import etree
 SKIP_CONTEXTS = {"defs", "clipPath", "mask", "symbol", "marker", "pattern", "metadata"}
 
 MADE_WITH_NOTE = (
-    "Made with Daisey Cutter (https://github.com/j33433/daisycutter)"
+    "Made with Daisy Cutter (https://github.com/j33433/daisycutter)"
 )
 
 # Appearance attrs path-difference often drops or overwrites (→ default black).
