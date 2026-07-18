@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Punch Holes: use the selected object as a cutter and subtract its shape
+Daisy Cutter: use the selected object as a cutter and subtract its shape
 from every object rendered below it, leaving transparent holes.
 """
 import copy
@@ -134,7 +134,7 @@ def add_made_with_metadata(svg):
         desc.text = MADE_WITH_NOTE
 
 
-class PunchHoles(inkex.EffectExtension):
+class DaisyCutter(inkex.EffectExtension):
 
     def add_arguments(self, pars):
         pars.add_argument("--keep_cutter", type=inkex.Boolean, default=False)
@@ -236,4 +236,4 @@ class PunchHoles(inkex.EffectExtension):
 
 
 if __name__ == "__main__":
-    PunchHoles().run()
+    DaisyCutter().run()
