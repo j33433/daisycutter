@@ -2,6 +2,8 @@
 
 Inkscape extension that punches a hole through every object beneath a selected shape.
 
+![Daisy Cutter UI](daisy.gif)
+
 With stock Inkscape, **Path → Difference** only cuts one pair at a time. You select the cutter and a single path under it, run Difference, duplicate the cutter, and do it again for the next path. That gets old fast on a busy design.
 
 Daisy Cutter runs that loop for you. Select one **cutter** object; it subtracts that shape from every object below, leaving a hole in the cutter's outline. Each cut object keeps its own fill, stroke, and style. The cutter is deleted when done (optional: keep it).
