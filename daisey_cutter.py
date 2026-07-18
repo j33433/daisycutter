@@ -14,6 +14,10 @@ from lxml import etree
 
 SKIP_CONTEXTS = {"defs", "clipPath", "mask", "symbol", "marker", "pattern", "metadata"}
 
+MADE_WITH_NOTE = (
+    "Made with Daisey Cutter (https://github.com/j33433/daisycutter)"
+)
+
 # Appearance attrs path-difference often drops or overwrites (→ default black).
 STYLE_ATTRS = (
     "style", "class",
@@ -91,6 +95,43 @@ def neutralize_cutter_paint(el):
         if attr in el.attrib:
             del el.attrib[attr]
     el.set("style", "fill:#000000;stroke:none;opacity:1")
+
+
+def _ensure_child(parent, tag):
+    """Return existing child with clark-notation tag, or create one."""
+    child = parent.find(tag)
+    if child is None:
+        child = etree.SubElement(parent, tag)
+    return child
+
+
+def add_made_with_metadata(svg):
+    """Leave a Dublin Core description credit in svg metadata (idempotent)."""
+    meta = svg.metadata
+    rdf = _ensure_child(meta, inkex.addNS("RDF", "rdf"))
+    work = _ensure_child(rdf, inkex.addNS("Work", "cc"))
+    if work.get(inkex.addNS("about", "rdf")) is None:
+        work.set(inkex.addNS("about", "rdf"), "")
+
+    fmt = _ensure_child(work, inkex.addNS("format", "dc"))
+    if not (fmt.text and fmt.text.strip()):
+        fmt.text = "image/svg+xml"
+
+    dtype = _ensure_child(work, inkex.addNS("type", "dc"))
+    if dtype.get(inkex.addNS("resource", "rdf")) is None:
+        dtype.set(
+            inkex.addNS("resource", "rdf"),
+            "http://purl.org/dc/dcmitype/StillImage",
+        )
+
+    desc = _ensure_child(work, inkex.addNS("description", "dc"))
+    existing = (desc.text or "").strip()
+    if MADE_WITH_NOTE in existing:
+        return
+    if existing:
+        desc.text = existing + "\n" + MADE_WITH_NOTE
+    else:
+        desc.text = MADE_WITH_NOTE
 
 
 class PunchHoles(inkex.EffectExtension):
@@ -185,6 +226,7 @@ class PunchHoles(inkex.EffectExtension):
             for tgt_id, snap in saved_styles.items():
                 result = self.svg.getElementById(tgt_id)
                 restore_style(result, snap)
+            add_made_with_metadata(self.svg)
         finally:
             for f in (tmp_in, tmp_out):
                 try:
