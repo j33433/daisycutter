@@ -2,7 +2,9 @@
 
 Inkscape extension that punches a hole through every object beneath a selected shape.
 
-Pick one object as the **cutter**. The extension subtracts that shape from each object below it (path difference), leaving a transparent hole in the cutter’s exact outline. Underlying objects keep their own fill, stroke, and style. The cutter is removed afterward (or kept, if you prefer).
+Normally, **Path → Difference** only works on the current selection: you pick the cutter plus **one** path beneath it, run Difference, then repeat for the next path — duplicating the cutter each time. On a complex design with many shapes under one cutter, that is a lot of manual work.
+
+Daisey Cutter does that loop for you. Pick one object as the **cutter**; the extension subtracts its shape from every object below it, leaving a transparent hole in the cutter’s exact outline. Underlying objects keep their own fill, stroke, and style. The cutter is removed afterward (or kept, if you prefer).
 
 ## Install
 
