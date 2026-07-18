@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <name>Daisey Cutter</name>
+    <id>org.example.punch_holes</id>
+    <param name="keep_cutter" type="bool" gui-text="Keep the cutter object afterwards">false</param>
+    <param name="only_overlapping" type="bool" gui-text="Only cut objects overlapping the cutter">true</param>
+    <effect>
+        <object-type>all</object-type>
+        <effects-menu>
+            <submenu name="Modify Path"/>
+        </effects-menu>
+    </effect>
+    <script>
+        <command location="inx" interpreter="python">daisey_cutter.py</command>
+    </script>
+</inkscape-extension>
