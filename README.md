@@ -19,7 +19,7 @@ cp daisy_cutter.py daisy_cutter.inx ~/.config/inkscape/extensions/
 # macOS
 cp daisy_cutter.py daisy_cutter.inx ~/Library/Application\ Support/org.inkscape.Inkscape/config/inkscape/extensions/
 
-# Windows (adjust username as needed)
+# Windows
 copy daisy_cutter.py daisy_cutter.inx %APPDATA%\inkscape\extensions\
 ```
 
