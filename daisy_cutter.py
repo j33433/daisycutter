@@ -225,11 +225,19 @@ class DaisyCutter(inkex.EffectExtension):
         try:
             self.document.write(tmp_in)
 
-            actions = []
+            # Convert all targets + cutter dups to paths once, then difference.
+            all_ids = []
+            for tgt_id, dup_id in pairs:
+                all_ids.append(tgt_id)
+                all_ids.append(dup_id)
+            actions = [
+                "select-clear",
+                "select-by-id:{}".format(",".join(all_ids)),
+                "object-to-path",
+            ]
             for tgt_id, dup_id in pairs:
                 actions.append("select-clear")
                 actions.append("select-by-id:{},{}".format(tgt_id, dup_id))
-                actions.append("object-to-path")   # rects/ellipses/text -> path
                 actions.append("path-difference")  # bottom minus top
             actions.append("export-filename:{}".format(tmp_out))
             actions.append("export-do")
