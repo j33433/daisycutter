@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
     <name>Daisey Cutter</name>
-    <id>org.example.punch_holes</id>
+    <id>com.github.j33433.daisycutter</id>
+    <label>
+Select one cutter object on top. Subtracts its shape from every
+object below (path difference), keeps their styles, then removes
+the cutter unless you keep it.
+    </label>
     <param name="keep_cutter" type="bool" gui-text="Keep the cutter object afterwards">false</param>
     <param name="only_overlapping" type="bool" gui-text="Only cut objects overlapping the cutter">true</param>
     <effect>
