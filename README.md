@@ -48,4 +48,5 @@ Restart Inkscape after installing.
 
 - Groups, images, and clones are not cut directly (normal shapes inside groups are fine)
 - Objects inside `defs`, clip paths, masks, etc. are skipped
+- Hidden or locked objects (including via a parent layer/group) are skipped
 - Needs Inkscape on `PATH` (boolean ops run in a headless Inkscape process)

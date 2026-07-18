@@ -46,6 +46,21 @@ def in_skipped_context(el):
     return False
 
 
+def is_locked_or_hidden(el):
+    """True if el or any ancestor is locked or display:none (Inkscape layer hide/lock)."""
+    node = el
+    while node is not None:
+        if node.get("sodipodi:insensitive", None) == "true":
+            return True
+        try:
+            if node.style.get("display", "") == "none":
+                return True
+        except (AttributeError, TypeError):
+            pass
+        node = node.getparent()
+    return False
+
+
 def bboxes_overlap(a, b):
     if a is None or b is None:
         return False
@@ -167,6 +182,8 @@ class DaisyCutter(inkex.EffectExtension):
             if isinstance(el, (Group, Image, Use)):
                 continue  # groups paint via children; images/clones can't be cut
             if in_skipped_context(el):
+                continue
+            if is_locked_or_hidden(el):
                 continue
             if self.options.only_overlapping and \
                     not bboxes_overlap(doc_bbox(el), cutter_bbox):
