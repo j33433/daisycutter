@@ -14,6 +14,16 @@ from lxml import etree
 
 SKIP_CONTEXTS = {"defs", "clipPath", "mask", "symbol", "marker", "pattern", "metadata"}
 
+# Appearance attrs path-difference often drops or overwrites (→ default black).
+STYLE_ATTRS = (
+    "style", "class",
+    "fill", "fill-opacity", "fill-rule",
+    "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray",
+    "stroke-dashoffset", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
+    "opacity", "filter", "mask", "clip-path", "paint-order",
+    "marker", "marker-start", "marker-mid", "marker-end",
+)
+
 
 def localname(el):
     try:
@@ -44,6 +54,43 @@ def doc_bbox(el):
     parent = el.getparent()
     tr = parent.composed_transform() if isinstance(parent, ShapeElement) else None
     return el.bounding_box(tr)
+
+
+def snapshot_style(el):
+    """Capture paint/style so we can restore after boolean ops."""
+    snap = {}
+    for attr in STYLE_ATTRS:
+        val = el.get(attr)
+        if val is not None:
+            snap[attr] = val
+    # inkex Style object covers computed inline style even if split across attrs
+    try:
+        style_str = str(el.style)
+        if style_str:
+            snap["style"] = style_str
+    except (AttributeError, TypeError):
+        pass
+    return snap
+
+
+def restore_style(el, snap):
+    """Re-apply snapshotted appearance onto the boolean result."""
+    if el is None or not snap:
+        return
+    # Drop paint attrs that booleans may have injected (e.g. fill:#000000)
+    for attr in STYLE_ATTRS:
+        if attr in el.attrib:
+            del el.attrib[attr]
+    for attr, val in snap.items():
+        el.set(attr, val)
+
+
+def neutralize_cutter_paint(el):
+    """Cutter dups only need geometry; strip paint so it can't leak into results."""
+    for attr in STYLE_ATTRS:
+        if attr in el.attrib:
+            del el.attrib[attr]
+    el.set("style", "fill:#000000;stroke:none;opacity:1")
 
 
 class PunchHoles(inkex.EffectExtension):
@@ -90,13 +137,16 @@ class PunchHoles(inkex.EffectExtension):
 
         # --- 2. Place one cutter duplicate directly above each target -----
         pairs = []
+        saved_styles = {}
         for i, tgt in enumerate(targets):
             tgt_id = tgt.get_id()  # ensures an id exists
+            saved_styles[tgt_id] = snapshot_style(tgt)
             parent = tgt.getparent()
 
             dup = copy.deepcopy(cutter)
             dup_id = "{}_punch_{}".format(cutter_id, i)
             dup.set("id", dup_id)
+            neutralize_cutter_paint(dup)
 
             # Compensate transforms so the duplicate lands at the exact
             # same visual spot even inside a different (transformed) group.
@@ -129,9 +179,12 @@ class PunchHoles(inkex.EffectExtension):
             command.inkscape(tmp_in, actions=";".join(actions),
                              batch_process=True)
 
-            # --- 5. Replace our document with the processed result --------
+            # --- 5. Replace document and restore each target's style ------
             self.document = load_svg(tmp_out)
             self.svg = self.document.getroot()
+            for tgt_id, snap in saved_styles.items():
+                result = self.svg.getElementById(tgt_id)
+                restore_style(result, snap)
         finally:
             for f in (tmp_in, tmp_out):
                 try:
