@@ -38,6 +38,7 @@ Restart Inkscape after installing.
 |--------|---------|-------------|
 | Keep the cutter object afterwards | off | Leave the cutter in the document |
 | Only cut objects overlapping the cutter | on | Skip shapes that don't overlap the cutter |
+| Experimental fast path (in-process when safe) | on | When the cutter is provably inside a path target, punch the hole in Python and skip headless Inkscape for that target. Turn off to always use classic path-difference. |
 
 ## Requirements
 
@@ -49,4 +50,5 @@ Restart Inkscape after installing.
 - Groups, images, and clones are not cut directly (normal shapes inside groups are fine)
 - Objects inside `defs`, clip paths, masks, etc. are skipped
 - Hidden or locked objects (including via a parent layer/group) are skipped
-- Needs Inkscape on `PATH` (boolean ops run in a headless Inkscape process)
+- Needs Inkscape on `PATH` (boolean ops run in a headless Inkscape process when the fast path can't handle a target)
+- Experimental fast path only applies to simple contained `<path>` targets; shapes, text, overhanging cutters, and complex fill-rules fall back to headless Inkscape

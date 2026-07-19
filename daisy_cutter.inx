@@ -9,6 +9,7 @@ the cutter unless you keep it.
     </label>
     <param name="keep_cutter" type="bool" gui-text="Keep the cutter object afterwards">false</param>
     <param name="only_overlapping" type="bool" gui-text="Only cut objects overlapping the cutter">true</param>
+    <param name="experimental_fast" type="bool" gui-text="Experimental fast path (in-process when safe)">true</param>
     <effect>
         <object-type>all</object-type>
         <effects-menu>
