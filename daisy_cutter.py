@@ -5,6 +5,8 @@ from every object rendered below it, leaving transparent holes.
 """
 import copy
 import os
+import subprocess
+import sys
 import tempfile
 
 import inkex
@@ -149,6 +151,102 @@ def add_made_with_metadata(svg):
         desc.text = MADE_WITH_NOTE
 
 
+def _popen_kwargs():
+    """Platform flags for headless child processes (no console flash on Windows)."""
+    kwargs = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+    return kwargs
+
+
+def action_path(path):
+    """
+    Absolute path safe to embed in Inkscape action args (file-open, export-filename).
+    Actions are parsed as name:arg, so Windows backslashes and bare drive colons
+    are hazardous; forward slashes are accepted by Inkscape on all platforms.
+    """
+    return os.path.abspath(path).replace("\\", "/")
+
+
+def inkscape_executable():
+    """Same binary inkex would call (respects INKSCAPE_COMMAND / Windows .exe)."""
+    try:
+        return command.which(command.INKSCAPE_EXECUTABLE_NAME)
+    except Exception:
+        return command.INKSCAPE_EXECUTABLE_NAME
+
+
+def start_inkscape_shell():
+    """
+    Launch `inkscape --shell` early so startup overlaps with Python prep.
+    Returns a Popen, or None if the binary can't be started.
+    """
+    try:
+        return subprocess.Popen(
+            [inkscape_executable(), "--shell"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **_popen_kwargs()
+        )
+    except OSError:
+        return None
+
+
+def run_actions_in_shell(proc, svg_in, actions, svg_out):
+    """
+    Send one action line to a warm --shell process and wait for it to finish.
+    actions: list of action strings (no file-open/quit); paths already action-safe.
+    Raises OSError/subprocess.SubprocessError/RuntimeError on failure.
+    """
+    if proc is None or proc.stdin is None:
+        raise RuntimeError("no inkscape shell")
+    # Shell mode: open the prepared SVG, run booleans, export, exit.
+    line = "file-open:{}; {}; quit-immediate\n".format(
+        action_path(svg_in), ";".join(actions))
+    try:
+        stdout, stderr = proc.communicate(line.encode("utf-8"), timeout=600)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.communicate()
+        raise RuntimeError("inkscape shell timed out")
+    if proc.returncode != 0:
+        detail = (stderr or b"").decode("utf-8", errors="replace")[:500]
+        raise RuntimeError(
+            "inkscape shell failed (rc={}): {}".format(proc.returncode, detail))
+    if not os.path.isfile(svg_out) or os.path.getsize(svg_out) == 0:
+        detail = (stderr or b"").decode("utf-8", errors="replace")[:500]
+        raise RuntimeError("inkscape shell produced no output: {}".format(detail))
+
+
+def stop_inkscape_shell(proc):
+    """Best-effort cleanup if we abandon a shell process."""
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+    except OSError:
+        pass
+
+
+def run_path_differences(svg_in, actions, svg_out, shell_proc=None):
+    """
+    Run boolean actions on svg_in → svg_out.
+    Prefer a pre-started --shell (startup overlapped with prep); fall back to
+    a classic one-shot inkscape invocation (no new deps either way).
+    """
+    if shell_proc is not None:
+        try:
+            run_actions_in_shell(shell_proc, svg_in, actions, svg_out)
+            return
+        except (OSError, RuntimeError, subprocess.SubprocessError):
+            stop_inkscape_shell(shell_proc)
+            # fall through to classic path
+    command.inkscape(svg_in, actions=";".join(actions), batch_process=True)
+
+
 class DaisyCutter(inkex.EffectExtension):
 
     def add_arguments(self, pars):
@@ -193,71 +291,78 @@ class DaisyCutter(inkex.EffectExtension):
         if not targets:
             raise inkex.AbortExtension("No objects found below the cutter.")
 
+        # Start headless Inkscape now so its ~0.3s startup overlaps prep work
+        # (dups, style snapshots, temp SVG write). No extra deps: stdlib only.
+        shell_proc = start_inkscape_shell()
+
         # --- 2. Place one cutter duplicate directly above each target -----
         pairs = []
         saved_styles = {}
-        for i, tgt in enumerate(targets):
-            tgt_id = tgt.get_id()  # ensures an id exists
-            saved_styles[tgt_id] = snapshot_style(tgt)
-            parent = tgt.getparent()
-
-            dup = copy.deepcopy(cutter)
-            dup_id = "{}_punch_{}".format(cutter_id, i)
-            dup.set("id", dup_id)
-            neutralize_cutter_paint(dup)
-
-            # Compensate transforms so the duplicate lands at the exact
-            # same visual spot even inside a different (transformed) group.
-            parent_tr = parent.composed_transform() \
-                if isinstance(parent, ShapeElement) else inkex.Transform()
-            dup.transform = (-parent_tr) @ cutter_ct
-
-            parent.insert(parent.index(tgt) + 1, dup)
-            pairs.append((tgt_id, dup_id))
-
-        # --- 3. Remove the original cutter (optional) ----------------------
-        if not self.options.keep_cutter:
-            cutter.getparent().remove(cutter)
-
-        # --- 4. Run the boolean differences via headless Inkscape ---------
-        tmp_in = tempfile.NamedTemporaryFile(suffix=".svg", delete=False).name
-        tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False).name
         try:
-            self.document.write(tmp_in)
+            for i, tgt in enumerate(targets):
+                tgt_id = tgt.get_id()  # ensures an id exists
+                saved_styles[tgt_id] = snapshot_style(tgt)
+                parent = tgt.getparent()
 
-            # Convert all targets + cutter dups to paths once, then difference.
-            all_ids = []
-            for tgt_id, dup_id in pairs:
-                all_ids.append(tgt_id)
-                all_ids.append(dup_id)
-            actions = [
-                "select-clear",
-                "select-by-id:{}".format(",".join(all_ids)),
-                "object-to-path",
-            ]
-            for tgt_id, dup_id in pairs:
-                actions.append("select-clear")
-                actions.append("select-by-id:{},{}".format(tgt_id, dup_id))
-                actions.append("path-difference")  # bottom minus top
-            actions.append("export-filename:{}".format(tmp_out))
-            actions.append("export-do")
+                dup = copy.deepcopy(cutter)
+                dup_id = "{}_punch_{}".format(cutter_id, i)
+                dup.set("id", dup_id)
+                neutralize_cutter_paint(dup)
 
-            command.inkscape(tmp_in, actions=";".join(actions),
-                             batch_process=True)
+                # Compensate transforms so the duplicate lands at the exact
+                # same visual spot even inside a different (transformed) group.
+                parent_tr = parent.composed_transform() \
+                    if isinstance(parent, ShapeElement) else inkex.Transform()
+                dup.transform = (-parent_tr) @ cutter_ct
 
-            # --- 5. Replace document and restore each target's style ------
-            self.document = load_svg(tmp_out)
-            self.svg = self.document.getroot()
-            for tgt_id, snap in saved_styles.items():
-                result = self.svg.getElementById(tgt_id)
-                restore_style(result, snap)
-            add_made_with_metadata(self.svg)
+                parent.insert(parent.index(tgt) + 1, dup)
+                pairs.append((tgt_id, dup_id))
+
+            # --- 3. Remove the original cutter (optional) ------------------
+            if not self.options.keep_cutter:
+                cutter.getparent().remove(cutter)
+
+            # --- 4. Boolean differences via warm shell (or classic fallback)
+            tmp_in = tempfile.NamedTemporaryFile(suffix=".svg", delete=False).name
+            tmp_out = tempfile.NamedTemporaryFile(suffix=".svg", delete=False).name
+            try:
+                self.document.write(tmp_in)
+
+                # Convert all targets + cutter dups to paths once, then difference.
+                all_ids = []
+                for tgt_id, dup_id in pairs:
+                    all_ids.append(tgt_id)
+                    all_ids.append(dup_id)
+                actions = [
+                    "select-clear",
+                    "select-by-id:{}".format(",".join(all_ids)),
+                    "object-to-path",
+                ]
+                for tgt_id, dup_id in pairs:
+                    actions.append("select-clear")
+                    actions.append("select-by-id:{},{}".format(tgt_id, dup_id))
+                    actions.append("path-difference")  # bottom minus top
+                actions.append("export-filename:{}".format(action_path(tmp_out)))
+                actions.append("export-do")
+
+                run_path_differences(tmp_in, actions, tmp_out, shell_proc)
+                shell_proc = None  # consumed (exited) or abandoned in fallback
+
+                # --- 5. Replace document and restore each target's style --
+                self.document = load_svg(tmp_out)
+                self.svg = self.document.getroot()
+                for tgt_id, snap in saved_styles.items():
+                    result = self.svg.getElementById(tgt_id)
+                    restore_style(result, snap)
+                add_made_with_metadata(self.svg)
+            finally:
+                for f in (tmp_in, tmp_out):
+                    try:
+                        os.remove(f)
+                    except OSError:
+                        pass
         finally:
-            for f in (tmp_in, tmp_out):
-                try:
-                    os.remove(f)
-                except OSError:
-                    pass
+            stop_inkscape_shell(shell_proc)
 
 
 if __name__ == "__main__":
