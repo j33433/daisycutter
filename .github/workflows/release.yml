@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
+      - name: Build plugin zip
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          STAGING="daisy-cutter-${VERSION}"
+          mkdir -p "${STAGING}"
+          cp daisy_cutter.py daisy_cutter.inx "${STAGING}/"
+          pandoc -t plain -o "${STAGING}/README.txt" README.md
+          zip -r "daisy-cutter-${VERSION}.zip" "${STAGING}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: daisy-cutter-${{ github.ref_name }}.zip
+          generate_release_notes: true
